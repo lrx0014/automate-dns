@@ -1,59 +1,53 @@
-# Worker + D1 Database
+# Automate DNS API
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/cloudflare/templates/tree/main/d1-template)
+Automate DNS is a JSON-only API server built on Cloudflare Workers. It exposes CRUD endpoints for managing resolver records, routes requests with [Hono](https://hono.dev/), and persists data with [Drizzle ORM](https://orm.drizzle.team/) + Cloudflare [D1](https://developers.cloudflare.com/d1/).
 
-![Worker + D1 Template Preview](https://imagedelivery.net/wSMYJvS3Xw-n339CbDyDIA/cb7cb0a9-6102-4822-633c-b76b7bb25900/public)
+## Features
 
-<!-- dash-content-start -->
+- RESTful CRUD endpoints for resolver records with soft-delete semantics.
+- Input validation for provider, hostname, alias, and IPv4 fields plus uniqueness enforcement on provider/hostname pairs.
+- Health/root discovery endpoints for quick observability checks.
+- Automatic Cloudflare DNS A-record sync whenever a resolver's IPv4 changes.
 
-D1 is Cloudflare's native serverless SQL database ([docs](https://developers.cloudflare.com/d1/)). This project demonstrates using a Worker with a D1 binding to execute a SQL statement. A simple frontend displays the result of this query:
+### Endpoints
 
-```SQL
-SELECT * FROM comments LIMIT 3;
-```
+| Method | Path             | Description                                  |
+|--------|------------------|----------------------------------------------|
+| GET    | `/`              | Service metadata + endpoint list             |
+| GET    | `/health`        | Simple health probe                          |
+| GET    | `/resolvers`     | List resolvers (supports filters & paging)   |
+| POST   | `/resolvers`     | Create resolver                              |
+| GET    | `/resolvers/:id` | Fetch resolver by id                         |
+| PUT    | `/resolvers/:id` | Replace/patch resolver (same as PATCH)       |
+| PATCH  | `/resolvers/:id` | Replace/patch resolver (same as PUT)         |
+| DELETE | `/resolvers/:id` | Soft-delete resolver                         |
 
-The D1 database is initialized with a `comments` table and this data:
-
-```SQL
-INSERT INTO comments (author, content)
-VALUES
-    ('Kristian', 'Congrats!'),
-    ('Serena', 'Great job!'),
-    ('Max', 'Keep up the good work!')
-;
-```
-
-> [!IMPORTANT]
-> When using C3 to create this project, select "no" when it asks if you want to deploy. You need to follow this project's [setup steps](https://github.com/cloudflare/templates/tree/main/d1-template#setup-steps) before deploying.
-
-<!-- dash-content-end -->
+Query params: `provider`, `hostname`, `includeDeleted`, `limit`, `offset`.
 
 ## Getting Started
 
-Outside of this repo, you can start a new project with this template using [C3](https://developers.cloudflare.com/pages/get-started/c3/) (the `create-cloudflare` CLI):
-
-```
-npm create cloudflare@latest -- --template=cloudflare/templates/d1-template
-```
-
-A live public deployment of this template is available at [https://d1-template.templates.workers.dev](https://d1-template.templates.workers.dev)
-
-## Setup Steps
-
-1. Install the project dependencies with a package manager of your choice:
+1. Install dependencies:
    ```bash
    npm install
    ```
-2. Create a [D1 database](https://developers.cloudflare.com/d1/get-started/) with the name "d1-template-database":
+2. Create a D1 database and update `wrangler.json` with the binding id/name.
+3. Configure Cloudflare credentials used for DNS syncing:
    ```bash
-   npx wrangler d1 create d1-template-database
+   wrangler secret put CLOUDFLARE_API_TOKEN   # API token with DNS edit permissions
+   wrangler secret put CLOUDFLARE_ZONE_ID     # Zone ID that owns the records
    ```
-   ...and update the `database_id` field in `wrangler.json` with the new database ID.
-3. Run the following db migration to initialize the database (notice the `migrations` directory in this project):
+4. Run migrations (local or remote):
    ```bash
-   npx wrangler d1 migrations apply --remote d1-template-database
+   npx wrangler d1 migrations apply DB --local
+   npx wrangler d1 migrations apply DB --remote
    ```
-4. Deploy the project!
+5. Start the worker locally:
    ```bash
-   npx wrangler deploy
+   npm run dev
    ```
+6. Deploy:
+   ```bash
+   npm run deploy
+   ```
+
+Invoke the endpoints with `curl`, `HTTPie`, or the Cloudflare dashboard. Every response is JSON, so you can wire it into automation pipelines easily.
